@@ -46,8 +46,9 @@ package tcpreader
 
 import (
 	"errors"
-	"github.com/google/gopacket/tcpassembly"
 	"io"
+
+	"github.com/google/gopacket/tcpassembly"
 )
 
 var discardBuffer = make([]byte, 4096)
@@ -144,7 +145,6 @@ func (r *ReaderStream) Reassembled(reassembly []tcpassembly.Reassembly) {
 // ReassemblyComplete implements tcpassembly.Stream's ReassemblyComplete function.
 func (r *ReaderStream) ReassemblyComplete() {
 	close(r.reassembled)
-	close(r.done)
 }
 
 // stripEmpty strips empty reassembly slices off the front of its current set of
@@ -171,12 +171,12 @@ func (r *ReaderStream) Read(p []byte) (int, error) {
 	var ok bool
 	r.stripEmpty()
 	for !r.closed && len(r.current) == 0 {
-		if r.first {
-			r.first = false
-		} else {
-			r.done <- true
-		}
 		if r.current, ok = <-r.reassembled; ok {
+			if r.first {
+				r.first = false
+			} else {
+				r.done <- true
+			}
 			r.stripEmpty()
 		} else {
 			r.closed = true
@@ -203,6 +203,7 @@ func (r *ReaderStream) Close() error {
 	r.closed = true
 	for {
 		if _, ok := <-r.reassembled; !ok {
+			close(r.done)
 			return nil
 		}
 		r.done <- true
